@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Résultats de recherche</h2>
+    
+    <form action="{{ url_for('search_users') }}" method="get" class="mb-4">
+        <div class="input-group">
+            <input type="text" name="query" class="form-control" placeholder="Rechercher des utilisateurs..." value="{{ query }}">
+            <div class="input-group-append">
+                <button class="btn btn-primary" type="submit">Rechercher</button>
+            </div>
+        </div>
+    </form>
+
+    {% if users %}
+        <div class="row">
+            {% for user in users %}
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <img src="{{ url_for('static', filename='uploads/' + (user.profile_photo or 'default_profile.png')) }}" 
+                                 class="rounded-circle mx-auto d-block mb-2" 
+                                 style="width: 100px; height: 100px; object-fit: cover;">
+                            <h5 class="card-title text-center">{{ user.username }}</h5>
+                            <p class="card-text text-center">{{ user.bio or 'Pas de bio' }}</p>
+                            <div class="text-center">
+                                <a href="{{ url_for('profile', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">Voir le profil</a>
+                                {% if current_user.id != user.id %}
+                                    <form action="{{ url_for('follow_user', user_id=user.id) }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-primary">
+                                            {% if user in current_user.following %}
+                                                Se désabonner
+                                            {% else %}
+                                                S'abonner
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            Aucun utilisateur trouvé pour "{{ query }}"
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

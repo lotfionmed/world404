@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card chat-card">
+                <div class="card-header chat-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <img src="{{ url_for('static', filename='default-avatar.png') }}" 
+                             class="rounded-circle me-2" width="40" height="40" alt="Avatar">
+                        <h3>{{ other_user.username }}</h3>
+                    </div>
+                    <a href="{{ url_for('messages') }}" class="btn btn-light">
+                        <i class="fas fa-arrow-left me-2"></i>Retour
+                    </a>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    {% for message in messages %}
+                        <div class="message {% if message.sender_id == current_user.id %}text-end{% endif %}">
+                            <div class="message-content {% if message.sender_id == current_user.id %}sent{% else %}received{% endif %}">
+                                {{ message.content }}
+                                <small class="d-block">
+                                    <i class="far fa-clock me-1"></i>
+                                    {{ message.timestamp.strftime('%H:%M') }}
+                                </small>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="card-footer chat-footer">
+                    <form method="POST" id="message-form" class="mb-0">
+                        <div class="input-group">
+                            <input type="text" name="content" class="form-control" 
+                                   placeholder="Écrivez votre message..." required autocomplete="off">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane me-1"></i>
+                                Envoyer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.chat-messages {
+    padding: 1rem;
+    background: #f8f9fa;
+    height: 400px;
+    overflow-y: auto;
+}
+
+.message-content {
+    max-width: 70%;
+    word-wrap: break-word;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.message-content.sent {
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
+}
+
+.message-content.received {
+    background-color: #e9ecef;
+    color: #212529;
+}
+
+.message-content small {
+    font-size: 0.75rem;
+}
+
+.message-content.sent small {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.message-content.received small {
+    color: #6c757d;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageForm = document.getElementById('message-form');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Garder une trace des messages déjà affichés
+    const displayedMessageIds = new Set();
+
+    // Gérer l'envoi du formulaire en AJAX
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(messageForm);
+        
+        fetch('{{ url_for("chat", user_id=other_user.id) }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                const content = formData.get('content');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message mb-3 text-end';
+                messageDiv.innerHTML = `
+                    <div class="message-content sent">
+                        ${content}
+                        <small class="d-block">
+                            <i class="far fa-clock me-1"></i>
+                            ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </small>
+                    </div>
+                `;
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                messageForm.reset();
+            }
+        });
+    });
+
+    // Actualisation automatique des messages
+    setInterval(function() {
+        fetch('{{ url_for("get_unread_messages", user_id=other_user.id) }}')
+            .then(response => response.json())
+            .then(messages => {
+                messages.forEach(message => {
+                    // Vérifier si le message n'a pas déjà été affiché
+                    if (!displayedMessageIds.has(message.id)) {
+                        displayedMessageIds.add(message.id);
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message mb-3';
+                        messageDiv.innerHTML = `
+                            <div class="message-content received">
+                                ${message.content}
+                                <small class="d-block">
+                                    <i class="far fa-clock me-1"></i>
+                                    ${message.timestamp}
+                                </small>
+                            </div>
+                        `;
+                        chatMessages.appendChild(messageDiv);
+                    }
+                });
+                if (messages.length > 0) {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            });
+    }, 3000);
+});
+
+// Faire défiler automatiquement vers le bas
+function scrollToBottom() {
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Appeler au chargement de la page
+document.addEventListener('DOMContentLoaded', scrollToBottom);
+
+// Appeler après l'envoi d'un message
+document.getElementById('message-form').addEventListener('submit', function() {
+    setTimeout(scrollToBottom, 100);
+});
+</script>
+{% endblock %}

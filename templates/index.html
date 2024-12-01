@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2 d-flex justify-content-between align-items-center">
+            <form action="{{ url_for('search_users') }}" method="get" class="d-flex flex-grow-1 me-2">
+                <input class="form-control me-2" type="search" name="query" placeholder="Rechercher des utilisateurs" aria-label="Search">
+                <button class="btn btn-outline-primary" type="submit">Rechercher</button>
+            </form>
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('messages') }}" class="btn btn-primary">
+                <i class="fas fa-envelope"></i> Messages
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            {% for post in posts %}
+            <div class="card post-card mb-4" data-post-id="{{ post.id }}">
+                <div class="card-header d-flex align-items-center">
+                    <img src="{{ url_for('static', filename='default-avatar.png') }}" class="rounded-circle me-2" width="32" height="32">
+                    <h6 class="mb-0">{{ post.author.username }}</h6>
+                </div>
+                
+                <img src="{{ url_for('static', filename=post.image_path) }}" class="card-img-top post-image" alt="Post image">
+                
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <button class="btn btn-link like-button p-0 me-3" data-post-id="{{ post.id }}">
+                                {% set user_liked = false %}
+                                {% for like in post.likes %}
+                                    {% if like.user_id == current_user.id %}
+                                        {% set user_liked = true %}
+                                    {% endif %}
+                                {% endfor %}
+                                <i class="fa{% if user_liked %}s text-danger{% else %}r{% endif %} fa-heart"></i>
+                                <span class="likes-count">{{ post.likes|length }}</span>
+                            </button>
+                            <button class="btn btn-link comment-toggle p-0" data-post-id="{{ post.id }}">
+                                <i class="far fa-comment"></i>
+                                <span class="comments-count">{{ post.comments|length }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <p class="card-text">
+                        <strong>{{ post.author.username }}</strong> {{ post.caption }}
+                    </p>
+
+                    <div class="comments-section" id="comments-{{ post.id }}">
+                        {% for comment in post.comments[:3] %}
+                        <div class="comment" data-comment-id="{{ comment.id }}">
+                            <small>
+                                <strong>{{ comment.author.username }}</strong> {{ comment.content }}
+                                {% if current_user.id == comment.user_id %}
+                                <button class="btn btn-link btn-sm text-danger delete-comment p-0" data-comment-id="{{ comment.id }}">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% endif %}
+                            </small>
+                        </div>
+                        {% endfor %}
+                        
+                        {% if post.comments|length > 3 %}
+                        <button class="btn btn-link btn-sm view-all-comments" data-post-id="{{ post.id }}">
+                            Voir tous les commentaires ({{ post.comments|length }})
+                        </button>
+                        {% endif %}
+                    </div>
+
+                    <div class="add-comment mt-2">
+                        <form class="comment-form" data-post-id="{{ post.id }}">
+                            <div class="input-group">
+                                <input type="text" class="form-control comment-input" placeholder="Ajouter un commentaire...">
+                                <button type="submit" class="btn btn-outline-primary">Publier</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestion des likes
+        document.querySelectorAll('.like-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const postId = this.dataset.postId;
+                fetch(`/like/${postId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const heartIcon = this.querySelector('i');
+                    const likesCount = this.querySelector('.likes-count');
+                    
+                    if (data.status === 'like') {
+                        heartIcon.classList.remove('far');
+                        heartIcon.classList.add('fas', 'text-danger');
+                    } else {
+                        heartIcon.classList.remove('fas', 'text-danger');
+                        heartIcon.classList.add('far');
+                    }
+                    
+                    likesCount.textContent = data.likes;
+                });
+            });
+        });
+
+        // Gestion des commentaires
+        document.querySelectorAll('.comment-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const postId = this.dataset.postId;
+                const input = this.querySelector('.comment-input');
+                const content = input.value.trim();
+
+                if (content) {
+                    fetch(`/comment/${postId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: `content=${encodeURIComponent(content)}`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            const commentsSection = document.querySelector(`#comments-${postId}`);
+                            const commentHTML = `
+                                <div class="comment" data-comment-id="${data.comment.id}">
+                                    <small>
+                                        <strong>${data.comment.author.username}</strong> ${data.comment.content}
+                                        <button class="btn btn-link btn-sm text-danger delete-comment p-0" data-comment-id="${data.comment.id}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </small>
+                                </div>
+                            `;
+                            commentsSection.insertAdjacentHTML('beforeend', commentHTML);
+                            input.value = '';
+                            
+                            // Mettre à jour le compteur de commentaires
+                            const commentsCount = form.closest('.card').querySelector('.comments-count');
+                            commentsCount.textContent = parseInt(commentsCount.textContent) + 1;
+                        }
+                    });
+                }
+            });
+        });
+
+        // Suppression des commentaires
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.delete-comment')) {
+                const button = e.target.closest('.delete-comment');
+                const commentId = button.dataset.commentId;
+                const commentElement = button.closest('.comment');
+
+                fetch(`/delete_comment/${commentId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        commentElement.remove();
+                        // Mettre à jour le compteur de commentaires
+                        const card = button.closest('.card');
+                        const commentsCount = card.querySelector('.comments-count');
+                        commentsCount.textContent = parseInt(commentsCount.textContent) - 1;
+                    }
+                });
+            }
+        });
+    });
+    </script>
+{% endblock %}
